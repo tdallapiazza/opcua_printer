@@ -1,3 +1,6 @@
 pytest
 pytest-cov
 asyncua
+moonraker-api
+websocket
+websocket-client
