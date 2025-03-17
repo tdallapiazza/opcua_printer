@@ -23,6 +23,15 @@ Simply run the server script
 python3 server.py
 ```
 
+### Run it in a Docker container
+
+The project includes a Dockerfile to run the server in a docker container. Issue the following commands to build and run the container.
+
+´´´
+docker build -t opcua-printer  .
+docker run -d -p 127.0.0.1:4840:4840 opcua-printer
+´´´
+
 ## Authors
 
 Thomas Dalla Piazza
