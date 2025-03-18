@@ -13,7 +13,7 @@ import logging
 import asyncio
 from asyncua import Server, ua
 from asyncua.common.methods import uamethod
-
+import json
 
 HOST = "localhost"
 PORT = 7125
@@ -116,7 +116,18 @@ async def main():
     listener = OpcuaConnector("opc.tcp://0.0.0.0:4840/freeopcua/server/", "http://automation.ceff.ch")
     client = listener.client
     await client.connect()
-    await client.call_method("printer.info")
+    response = await client.call_method("printer.info")
+    print(response)
+    response = await client.call_method("printer.objects.list")
+    print(response)
+    params = {"objects": 
+              {"gcode_move": None,
+               "toolhead": ["position", "status"]
+               }
+              }
+
+    response = await client.call_method("printer.objects.query", **params)
+
 
 if __name__ == "__main__":
 
