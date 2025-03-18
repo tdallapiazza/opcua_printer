@@ -128,6 +128,11 @@ async def main():
 
     response = await client.call_method("printer.objects.query", **params)
 
+    response = await client.call_method("printer.objects.subscribe", **params)
+    
+    while True:
+        await asyncio.sleep(1)
+
 
 if __name__ == "__main__":
 
