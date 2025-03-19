@@ -21,7 +21,7 @@ PORT = 7125
 logging.basicConfig(
     level=logging.WARNING, format="%(name)s - %(levelname)s - %(message)s"
 )
-logging.getLogger("moonraker_api").setLevel(logging.DEBUG)
+logging.getLogger("moonraker_api").setLevel(logging.INFO)
 logging.getLogger(__name__).setLevel(logging.DEBUG)
 _LOGGER = logging.getLogger(__name__)
 
@@ -96,6 +96,8 @@ class OpcuaConnector(MoonrakerListener):
         elif state == WEBSOCKET_STATE_STOPPING:
             pass
         elif state == WEBSOCKET_STATE_STOPPED:
+            # try to reconnect
+            await self.client.connect()
             pass
 
     async def on_exception(self, exception: BaseException) -> None:
@@ -108,13 +110,15 @@ class OpcuaConnector(MoonrakerListener):
 
     async def on_notification(self, method: str, data: any) -> None:
         """Notifies of state updates."""
-        self._logger.debug("Received notification %s -> %s", method, data)
+
+        if method!= "notify_proc_stat_update":
+            self._logger.debug("Received notification %s -> %s", method, data)
 
         # Subscription notifications
         if method == "notify_status_update":
             message = data[0]
             timestamp = data[1]
-            self._logger.debug("Received status update notnificatio %s -> %s", timestamp, message)
+            self._logger.info("Received status update notnificatio %s -> %s", timestamp, message)
 
 async def main():
     listener = OpcuaConnector("opc.tcp://0.0.0.0:4840/freeopcua/server/", "http://automation.ceff.ch")
@@ -132,22 +136,27 @@ async def main():
     my_node = listener.server.get_node("ns=2;i=4")
     await my_node.set_value(response["state"])
 
-
-    response = await client.call_method("printer.objects.list")
-    print(response)
-    params = {"objects": 
-              {"gcode_move": None,
-               "toolhead": ["position", "status"]
-               }
-              }
-
-    response = await client.call_method("printer.objects.query", **params)
-
-    response = await client.call_method("printer.objects.subscribe", **params)
+    # Subscribe to printer object state changes
+    
     
     async with listener.server:
         while True:
             await asyncio.sleep(1)
+            # Querry Moonraker-api
+            params = {"objects": 
+              {"webhooks": ["state", "state_message"],
+               
+               }
+              }
+
+            response = await client.call_method("printer.objects.query", **params)
+
+            # update the ua nodes accordingly
+            if response is not None:
+                my_node = listener.server.get_node("ns=2;i=4") # klipper state
+                await my_node.set_value(response.get("status", {}).get("webhooks", {}).get("state", "Unknown"))
+
+
             my_node = listener.server.get_node("ns=2;i=5")
             new_val = await my_node.get_value() + 0.1
             listener._logger.info("Set value of %s to %.1f", my_node, new_val)
