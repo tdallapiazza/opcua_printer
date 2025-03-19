@@ -51,19 +51,23 @@ class OpcuaConnector(MoonrakerListener):
         # append the opcua server to the event loop
 
 
-    async def setup_addresse_space(self, endpoint, uri):
+    async def setup_address_space(self):
         await self.server.init()
-        self.server.set_endpoint(endpoint)
+        self.server.set_endpoint(self.endpoint)
 
         # set up our own namespace, not really necessary but should as spec
-        self.idx = await self.server.register_namespace(uri)
+        self.idx = await self.server.register_namespace(self.uri)
         # populating our address space
         # server.nodes, contains links to very common nodes like objects and root
-        myobj = await self.server.nodes.objects.add_object(self.idx, "MyObject")
-        self.myvar = await myobj.add_variable(self.idx, "MyVariable", 6.7)
+        printerObj = await self.server.nodes.objects.add_object(self.idx, "Printer")
+        printerInfoObj = await printerObj.add_object(self.idx, "Info")
+        self.printer_name = await printerInfoObj.add_property(self.idx, "name", None)
+        self.printer_state = await printerInfoObj.add_property(self.idx, "status", None)
+        self.myvar = await printerObj.add_variable(self.idx, "MyVariable", 6.7)
         # Set MyVariable to be writable by clients
         await self.myvar.set_writable()
-        await self.server.nodes.objects.add_method(
+        # add a method
+        await printerObj.add_method(
             ua.NodeId("ServerMethod", self.idx),
             ua.QualifiedName("ServerMethod", self.idx),
             func,
@@ -116,6 +120,10 @@ async def main():
     listener = OpcuaConnector("opc.tcp://0.0.0.0:4840/freeopcua/server/", "http://automation.ceff.ch")
     client = listener.client
     await client.connect()
+
+    # Setup the adress space
+    await listener.setup_address_space()
+
     response = await client.call_method("printer.info")
     print(response)
     response = await client.call_method("printer.objects.list")
@@ -130,8 +138,14 @@ async def main():
 
     response = await client.call_method("printer.objects.subscribe", **params)
     
-    while True:
-        await asyncio.sleep(1)
+    async with listener.server:
+        while True:
+            await asyncio.sleep(1)
+            my_node = listener.server.get_node("ns=2;i=5")
+            new_val = await my_node.get_value() + 0.1
+            listener._logger.info("Set value of %s to %.1f", my_node, new_val)
+            await my_node.write_value(new_val)
+
 
 
 if __name__ == "__main__":
