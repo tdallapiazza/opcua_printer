@@ -21,7 +21,7 @@ PORT = 7125
 logging.basicConfig(
     level=logging.WARNING, format="%(name)s - %(levelname)s - %(message)s"
 )
-logging.getLogger("moonraker_api").setLevel(logging.INFO)
+logging.getLogger("moonraker_api").setLevel(logging.DEBUG)
 logging.getLogger(__name__).setLevel(logging.DEBUG)
 _LOGGER = logging.getLogger(__name__)
 
@@ -59,10 +59,35 @@ class OpcuaConnector(MoonrakerListener):
         self.idx = await self.server.register_namespace(self.uri)
         # populating our address space
         # server.nodes, contains links to very common nodes like objects and root
+
+        # printer object
         printerObj = await self.server.nodes.objects.add_object(self.idx, "Printer")
+        #   info object
         printerInfoObj = await printerObj.add_object(self.idx, "Info")
-        self.printer_name = await printerInfoObj.add_property(self.idx, "name", ua.Variant("-", ua.VariantType.String))
-        self.printer_state = await printerInfoObj.add_property(self.idx, "status", ua.Variant("Unknown", ua.VariantType.String))
+        await printerInfoObj.add_property(self.idx, "name", ua.Variant("-", ua.VariantType.String)) # 3
+        await printerInfoObj.add_property(self.idx, "state", ua.Variant("Unknown", ua.VariantType.String)) # 4
+        await printerInfoObj.add_property(self.idx, "state message", ua.Variant("Unknown", ua.VariantType.String)) # 5
+
+        #   systems object
+        printerSystemObj = await printerObj.add_object(self.idx, "Systems")
+        #      bed
+        printerBedObj = await printerSystemObj.add_object(self.idx, "Bed")
+        await printerBedObj.add_property(self.idx, "x dimension", ua.Variant(120, ua.VariantType.Int16))
+        await printerBedObj.add_property(self.idx, "y dimension", ua.Variant(120, ua.VariantType.Int16))
+        await printerBedObj.add_variable(self.idx, "Temperature", 0.0)
+        await printerBedObj.add_variable(self.idx, "Temperature set point", 0.0)
+        await printerBedObj.add_variable(self.idx, "Print plate present", ua.Variant(True, ua.VariantType.Boolean))
+        await printerBedObj.add_variable(self.idx, "Print plate ID", 0xAE34B8C2)
+
+        #      hotend
+        printerHotendObj = await printerSystemObj.add_object(self.idx, "Hotend")
+        #      frame
+        printerFrameObj = await printerSystemObj.add_object(self.idx, "Frame")
+        #   actions
+        printerActionObj = await printerObj.add_object(self.idx, "Actions")
+
+
+
         self.myvar = await printerObj.add_variable(self.idx, "MyVariable", 6.7)
         # Set MyVariable to be writable by clients
         await self.myvar.set_writable()
@@ -96,8 +121,7 @@ class OpcuaConnector(MoonrakerListener):
         elif state == WEBSOCKET_STATE_STOPPING:
             pass
         elif state == WEBSOCKET_STATE_STOPPED:
-            # try to reconnect
-            await self.client.connect()
+            await self.stop()
             pass
 
     async def on_exception(self, exception: BaseException) -> None:
@@ -123,7 +147,8 @@ class OpcuaConnector(MoonrakerListener):
 async def main():
     listener = OpcuaConnector("opc.tcp://0.0.0.0:4840/freeopcua/server/", "http://automation.ceff.ch")
     client = listener.client
-    await client.connect()
+    await listener.start()
+
 
     # Setup the adress space
     await listener.setup_address_space()
@@ -135,12 +160,13 @@ async def main():
     await my_node.set_value(response["hostname"])
     my_node = listener.server.get_node("ns=2;i=4")
     await my_node.set_value(response["state"])
+    my_node = listener.server.get_node("ns=2;i=5")
+    await my_node.set_value(response["state_message"])
 
     # Subscribe to printer object state changes
     
-    
     async with listener.server:
-        while True:
+        while listener.running:
             await asyncio.sleep(1)
             # Querry Moonraker-api
             params = {"objects": 
@@ -152,15 +178,18 @@ async def main():
             response = await client.call_method("printer.objects.query", **params)
 
             # update the ua nodes accordingly
-            if response is not None:
+            webhook = response.get("status", {}).get("webhooks", {})
+            if webhook:
                 my_node = listener.server.get_node("ns=2;i=4") # klipper state
-                await my_node.set_value(response.get("status", {}).get("webhooks", {}).get("state", "Unknown"))
+                await my_node.set_value(webhook.get("state", "Unknown"))
+                my_node = listener.server.get_node("ns=2;i=5") # klipper state
+                await my_node.set_value(webhook.get("state_message", "Unknown"))
 
 
-            my_node = listener.server.get_node("ns=2;i=5")
-            new_val = await my_node.get_value() + 0.1
-            listener._logger.info("Set value of %s to %.1f", my_node, new_val)
-            await my_node.write_value(new_val)
+            # my_node = listener.server.get_node("ns=2;i=6")
+            # new_val = await my_node.get_value() + 0.1
+            # listener._logger.info("Set value of %s to %.1f", my_node, new_val)
+            # await my_node.write_value(new_val)
 
 
 
