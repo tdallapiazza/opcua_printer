@@ -61,8 +61,8 @@ class OpcuaConnector(MoonrakerListener):
         # server.nodes, contains links to very common nodes like objects and root
         printerObj = await self.server.nodes.objects.add_object(self.idx, "Printer")
         printerInfoObj = await printerObj.add_object(self.idx, "Info")
-        self.printer_name = await printerInfoObj.add_property(self.idx, "name", None)
-        self.printer_state = await printerInfoObj.add_property(self.idx, "status", None)
+        self.printer_name = await printerInfoObj.add_property(self.idx, "name", ua.Variant("-", ua.VariantType.String))
+        self.printer_state = await printerInfoObj.add_property(self.idx, "status", ua.Variant("Unknown", ua.VariantType.String))
         self.myvar = await printerObj.add_variable(self.idx, "MyVariable", 6.7)
         # Set MyVariable to be writable by clients
         await self.myvar.set_writable()
@@ -125,7 +125,14 @@ async def main():
     await listener.setup_address_space()
 
     response = await client.call_method("printer.info")
-    print(response)
+    
+    # Set the printer_info printer_name and printer_status
+    my_node = listener.server.get_node("ns=2;i=3")
+    await my_node.set_value(response["hostname"])
+    my_node = listener.server.get_node("ns=2;i=4")
+    await my_node.set_value(response["state"])
+
+
     response = await client.call_method("printer.objects.list")
     print(response)
     params = {"objects": 
