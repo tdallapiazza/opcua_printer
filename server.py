@@ -64,16 +64,20 @@ class OpcuaConnector(MoonrakerListener):
         printerObj = await self.server.nodes.objects.add_object(self.idx, "Printer")
         #   info object
         printerInfoObj = await printerObj.add_object(self.idx, "Info")
-        await printerInfoObj.add_property(self.idx, "name", ua.Variant("-", ua.VariantType.String)) # 3
-        await printerInfoObj.add_property(self.idx, "state", ua.Variant("Unknown", ua.VariantType.String)) # 4
-        await printerInfoObj.add_property(self.idx, "state message", ua.Variant("Unknown", ua.VariantType.String)) # 5
+        await printerInfoObj.add_property(self.idx, "Name", ua.Variant("", ua.VariantType.String)) # 3
+        await printerInfoObj.add_property(self.idx, "Manufacturer", ua.Variant("Voron", ua.VariantType.String)) # 3
+        await printerInfoObj.add_property(self.idx, "Model", ua.Variant("0.2", ua.VariantType.String)) # 3
+        await printerInfoObj.add_property(self.idx, "Location", ua.Variant("BE59", ua.VariantType.String))
+        await printerInfoObj.add_variable(self.idx, "State", ua.Variant("", ua.VariantType.String)) # 4
+        await printerInfoObj.add_variable(self.idx, "State message", ua.Variant("", ua.VariantType.String)) # 5
 
         #   systems object
         printerSystemObj = await printerObj.add_object(self.idx, "Systems")
         #      bed
         printerBedObj = await printerSystemObj.add_object(self.idx, "Bed")
-        await printerBedObj.add_property(self.idx, "x dimension", ua.Variant(120, ua.VariantType.Int16))
-        await printerBedObj.add_property(self.idx, "y dimension", ua.Variant(120, ua.VariantType.Int16))
+        await printerBedObj.add_property(self.idx, "X dimension", 120.0)
+        await printerBedObj.add_property(self.idx, "Y dimension", 120.0)
+        await printerBedObj.add_property(self.idx, "Power", 60.0)
         await printerBedObj.add_variable(self.idx, "Temperature", 0.0)
         await printerBedObj.add_variable(self.idx, "Temperature set point", 0.0)
         await printerBedObj.add_variable(self.idx, "Print plate present", ua.Variant(True, ua.VariantType.Boolean))
@@ -81,18 +85,45 @@ class OpcuaConnector(MoonrakerListener):
 
         #      hotend
         printerHotendObj = await printerSystemObj.add_object(self.idx, "Hotend")
+        await printerHotendObj.add_property(self.idx, "Manufacturer", ua.Variant("E3D", ua.VariantType.String))
+        await printerHotendObj.add_property(self.idx, "Model", ua.Variant("Revo", ua.VariantType.String))
+        await printerHotendObj.add_property(self.idx, "Power", 60.0)
+        await printerHotendObj.add_variable(self.idx, "Temperature", 0.0)
+        await printerHotendObj.add_variable(self.idx, "Temperature set point", 0.0)
+        await printerHotendObj.add_variable(self.idx, "X position", 0.0)
+        await printerHotendObj.add_variable(self.idx, "Y position", 0.0)
+        await printerHotendObj.add_variable(self.idx, "Hot end fan ON", ua.Variant(True, ua.VariantType.Boolean))
+        await printerHotendObj.add_variable(self.idx, "Piece cooling fan speed", 0.0)
+
         #      frame
         printerFrameObj = await printerSystemObj.add_object(self.idx, "Frame")
+        await printerFrameObj.add_variable(self.idx, "Filament runout sensor ON", ua.Variant(False, ua.VariantType.Boolean))
+        await printerFrameObj.add_variable(self.idx, "X endstop triggered", ua.Variant(False, ua.VariantType.Boolean))
+        await printerFrameObj.add_variable(self.idx, "Y endstop triggered", ua.Variant(False, ua.VariantType.Boolean))
+        await printerFrameObj.add_variable(self.idx, "Z endstop triggered", ua.Variant(False, ua.VariantType.Boolean))
+        await printerFrameObj.add_variable(self.idx, "Chamber temperature", 0.0)
+
+        #      spool
+        printerSpoolObj = await printerSystemObj.add_object(self.idx, "Spool") # Structure from OpenTag spec. https://github.com/Bambu-Research-Group/RFID-Tag-Guide/blob/main/OpenTag.md
+        await printerSpoolObj.add_property(self.idx, "Tag version", 1000)
+        await printerSpoolObj.add_property(self.idx, "Filament Manufacturer", ua.Variant("eSUN filament", ua.VariantType.String))
+        await printerSpoolObj.add_property(self.idx, "Material name", ua.Variant("ASA", ua.VariantType.String))
+        await printerSpoolObj.add_property(self.idx, "Color Name", ua.Variant("Polar White", ua.VariantType.String))
+        await printerSpoolObj.add_property(self.idx, "Diameter", 1750)
+        await printerSpoolObj.add_property(self.idx, "Weight (nominal)", 1000)
+        await printerSpoolObj.add_property(self.idx, "Print Temp (C)", 210)
+        await printerSpoolObj.add_property(self.idx, "Bed Temp (C)", 120)
+        await printerSpoolObj.add_property(self.idx, "Density", 1020)
+        await printerSpoolObj.add_property(self.idx, "Color Hex", 0x000000)
+        await printerSpoolObj.add_variable(self.idx, "Filament weight (measured)", 1000)
+        await printerSpoolObj.add_variable(self.idx, "Filament length (measured)", 336)
+        
+
         #   actions
         printerActionObj = await printerObj.add_object(self.idx, "Actions")
 
-
-
-        self.myvar = await printerObj.add_variable(self.idx, "MyVariable", 6.7)
-        # Set MyVariable to be writable by clients
-        await self.myvar.set_writable()
-        # add a method
-        await printerObj.add_method(
+        # add a methods
+        await printerActionObj.add_method(
             ua.NodeId("ServerMethod", self.idx),
             ua.QualifiedName("ServerMethod", self.idx),
             func,
@@ -156,12 +187,12 @@ async def main():
     response = await client.call_method("printer.info")
     
     # Set the printer_info printer_name and printer_status
-    my_node = listener.server.get_node("ns=2;i=3")
-    await my_node.set_value(response["hostname"])
-    my_node = listener.server.get_node("ns=2;i=4")
-    await my_node.set_value(response["state"])
-    my_node = listener.server.get_node("ns=2;i=5")
-    await my_node.set_value(response["state_message"])
+    # my_node = listener.server.get_node("ns=2;i=3")
+    # await my_node.set_value(response["hostname"])
+    # my_node = listener.server.get_node("ns=2;i=4")
+    # await my_node.set_value(response["state"])
+    # my_node = listener.server.get_node("ns=2;i=5")
+    # await my_node.set_value(response["state_message"])
 
     # Subscribe to printer object state changes
     
@@ -179,11 +210,11 @@ async def main():
 
             # update the ua nodes accordingly
             webhook = response.get("status", {}).get("webhooks", {})
-            if webhook:
-                my_node = listener.server.get_node("ns=2;i=4") # klipper state
-                await my_node.set_value(webhook.get("state", "Unknown"))
-                my_node = listener.server.get_node("ns=2;i=5") # klipper state
-                await my_node.set_value(webhook.get("state_message", "Unknown"))
+            # if webhook:
+            #     my_node = listener.server.get_node("ns=2;i=4") # klipper state
+            #     await my_node.set_value(webhook.get("state", "Unknown"))
+            #     my_node = listener.server.get_node("ns=2;i=5") # klipper state
+            #     await my_node.set_value(webhook.get("state_message", "Unknown"))
 
 
             # my_node = listener.server.get_node("ns=2;i=6")
