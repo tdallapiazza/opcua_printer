@@ -17,6 +17,8 @@ import json
 
 HOST = "localhost"
 PORT = 7125
+BED_RATED_POWER = 60.0
+EXTRUDER_RATED_POWER = 60.0
 
 logging.basicConfig(
     level=logging.WARNING, format="%(name)s - %(levelname)s - %(message)s"
@@ -77,9 +79,11 @@ class OpcuaConnector(MoonrakerListener):
         printerBedObj = await printerSystemObj.add_object(self.idx, "Bed")
         await printerBedObj.add_property(self.idx, "X dimension", 120.0)
         await printerBedObj.add_property(self.idx, "Y dimension", 120.0)
-        await printerBedObj.add_property(self.idx, "Power", 60.0)
+        await printerBedObj.add_property(self.idx, "Rated power", BED_RATED_POWER)
         await printerBedObj.add_variable(self.idx, "Temperature", 0.0)
         await printerBedObj.add_variable(self.idx, "Temperature set point", 0.0)
+        await printerBedObj.add_variable(self.idx, "Power (PWM)", 0.0)
+        await printerBedObj.add_variable(self.idx, "Power (computed [Watts])", 0.0)
         await printerBedObj.add_variable(self.idx, "Print plate present", ua.Variant(True, ua.VariantType.Boolean))
         await printerBedObj.add_variable(self.idx, "Print plate ID", 0xAE34B8C2)
 
@@ -87,11 +91,15 @@ class OpcuaConnector(MoonrakerListener):
         printerHotendObj = await printerSystemObj.add_object(self.idx, "Hotend")
         await printerHotendObj.add_property(self.idx, "Manufacturer", ua.Variant("E3D", ua.VariantType.String))
         await printerHotendObj.add_property(self.idx, "Model", ua.Variant("Revo", ua.VariantType.String))
-        await printerHotendObj.add_property(self.idx, "Power", 60.0)
+        await printerHotendObj.add_property(self.idx, "Rated power", EXTRUDER_RATED_POWER)
         await printerHotendObj.add_variable(self.idx, "Temperature", 0.0)
         await printerHotendObj.add_variable(self.idx, "Temperature set point", 0.0)
+        await printerHotendObj.add_variable(self.idx, "Power (PWM)", 0.0)
+        await printerHotendObj.add_variable(self.idx, "Power (computed [Watts])", 0.0)
         await printerHotendObj.add_variable(self.idx, "X position", 0.0)
         await printerHotendObj.add_variable(self.idx, "Y position", 0.0)
+        await printerHotendObj.add_variable(self.idx, "Z position", 0.0)
+        await printerHotendObj.add_variable(self.idx, "E position", 0.0)
         await printerHotendObj.add_variable(self.idx, "Hot end fan ON", ua.Variant(True, ua.VariantType.Boolean))
         await printerHotendObj.add_variable(self.idx, "Piece cooling fan speed", 0.0)
 
@@ -187,12 +195,8 @@ async def main():
     response = await client.call_method("printer.info")
     
     # Set the printer_info printer_name and printer_status
-    # my_node = listener.server.get_node("ns=2;i=3")
-    # await my_node.set_value(response["hostname"])
-    # my_node = listener.server.get_node("ns=2;i=4")
-    # await my_node.set_value(response["state"])
-    # my_node = listener.server.get_node("ns=2;i=5")
-    # await my_node.set_value(response["state_message"])
+    my_node = listener.server.get_node("ns=2;i=3")
+    await my_node.set_value(response["hostname"])
 
     # Subscribe to printer object state changes
     
@@ -202,19 +206,62 @@ async def main():
             # Querry Moonraker-api
             params = {"objects": 
               {"webhooks": ["state", "state_message"],
-               
-               }
-              }
-
+               "heater_bed": ["temperature", "target", "power"],
+               "extruder": ["temperature", "target", "power"],
+               "toolhead": ["position"],
+               "fan": ["speed"],
+              }}
             response = await client.call_method("printer.objects.query", **params)
-
+            endstops = await client.call_method("printer.query_endstops.status")
             # update the ua nodes accordingly
             webhook = response.get("status", {}).get("webhooks", {})
-            # if webhook:
-            #     my_node = listener.server.get_node("ns=2;i=4") # klipper state
-            #     await my_node.set_value(webhook.get("state", "Unknown"))
-            #     my_node = listener.server.get_node("ns=2;i=5") # klipper state
-            #     await my_node.set_value(webhook.get("state_message", "Unknown"))
+            if webhook:
+                my_node = listener.server.get_node("ns=2;i=7")
+                await my_node.set_value(webhook.get("state", "Unknown"))
+                my_node = listener.server.get_node("ns=2;i=8")
+                await my_node.set_value(webhook.get("state_message", "Unknown"))
+
+            heaterbed = response.get("status", {}).get("heater_bed", {})
+            if heaterbed:
+                my_node = listener.server.get_node("ns=2;i=14")
+                await my_node.set_value(heaterbed.get("temperature", 0.0))
+                my_node = listener.server.get_node("ns=2;i=15")
+                await my_node.set_value(heaterbed.get("target", 0.0))
+                my_node = listener.server.get_node("ns=2;i=16")
+                pow =heaterbed.get("power", 0.0)
+                await my_node.set_value(pow)
+                my_node = listener.server.get_node("ns=2;i=17")
+                await my_node.set_value(BED_RATED_POWER*pow)
+
+            extruder = response.get("status", {}).get("extruder", {})
+            if extruder:
+                my_node = listener.server.get_node("ns=2;i=24")
+                await my_node.set_value(extruder.get("temperature", 0.0))
+                my_node = listener.server.get_node("ns=2;i=25")
+                await my_node.set_value(extruder.get("target", 0.0))
+                my_node = listener.server.get_node("ns=2;i=26")
+                pow =extruder.get("power", 0.0)
+                await my_node.set_value(pow)
+                my_node = listener.server.get_node("ns=2;i=27")
+                await my_node.set_value(EXTRUDER_RATED_POWER*pow)
+            
+            toolhead = response.get("status", {}).get("toolhead", {})
+            if toolhead:
+                position=toolhead.get("position", [0.0, 0.0, 0.0, 0.0])
+                my_node = listener.server.get_node("ns=2;i=28")
+                await my_node.set_value(position[0])
+                my_node = listener.server.get_node("ns=2;i=29")
+                await my_node.set_value(position[1])
+                my_node = listener.server.get_node("ns=2;i=30")
+                await my_node.set_value(position[2])
+                my_node = listener.server.get_node("ns=2;i=31")
+                await my_node.set_value(position[3])
+            fan = response.get("status", {}).get("fan", {})
+            if fan:
+                my_node = listener.server.get_node("ns=2;i=33")
+                await my_node.set_value(fan.get("speed", 0.0))
+
+            
 
 
             # my_node = listener.server.get_node("ns=2;i=6")
