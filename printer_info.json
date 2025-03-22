@@ -1,0 +1,30 @@
+{
+    "printer":{
+        "Manufacturer": "Voron design",
+        "Model": "Voron 0.2",
+        "Idle power":32.0,
+        "Location": "BE59",
+        "Cumulated energy [J]": 156.3,
+        "Cumulated printing hours": 1234
+    },
+
+    "printbed":{
+        "X dimension": 120.0,
+        "Y dimension": 120.0,
+        "Rated power": 60.0
+    },
+
+    "hotend":{
+        "Manufacturer": "E3D",
+        "Model": "Revo",
+        "Rated power": 60.0,
+        "Nozzle diameter": 0.4,
+        "Nozzle printing hours": 250,
+        "Umblilical printing hours": 523
+    },
+
+    "spool":{
+        "Cumulated filament backed [m]": 12342
+    }
+
+}
