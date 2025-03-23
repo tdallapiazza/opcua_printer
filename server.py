@@ -25,13 +25,26 @@ PRINTER_INFO_FILE="printer_info.json"
 logging.basicConfig(
     level=logging.WARNING, format="%(name)s - %(levelname)s - %(message)s"
 )
-logging.getLogger("moonraker_api").setLevel(logging.DEBUG)
-logging.getLogger(__name__).setLevel(logging.DEBUG)
+logging.getLogger("moonraker_api").setLevel(logging.INFO)
+logging.getLogger(__name__).setLevel(logging.INFO)
 _LOGGER = logging.getLogger(__name__)
 
+
 @uamethod
-def func(parent, value):
-    return value * 2
+async def homeXYZ(parent):
+    params = {"script": "G28"}
+    await listener.client.call_method("printer.gcode.script", **params)
+
+@uamethod
+async def set_extruder_temperature(parent, temp):
+    params = {"script": f'SET_HEATER_TEMPERATURE HEATER=extruder TARGET={temp}'}
+    await listener.client.call_method("printer.gcode.script", **params)
+
+@uamethod
+async def set_bed_temperature(parent, temp):
+    params = {"script": f'SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET={temp}'}
+    await listener.client.call_method("printer.gcode.script", **params)
+
 
 async def increment_coro(value):
     while True:
@@ -150,11 +163,25 @@ class OpcuaConnector(MoonrakerListener):
 
         # add a methods
         await printerActionObj.add_method(
-            ua.NodeId("ServerMethod", self.idx),
-            ua.QualifiedName("ServerMethod", self.idx),
-            func,
+            ua.NodeId("Home all axis", self.idx),
+            ua.QualifiedName("Home all axis", self.idx),
+            homeXYZ,
+            [],
+            []
+        )
+        await printerActionObj.add_method(
+            ua.NodeId("Set extruder tempertature", self.idx),
+            ua.QualifiedName("Set extruder tempertature", self.idx),
+            set_extruder_temperature,
             [ua.VariantType.Int64],
+            []
+        )
+        await printerActionObj.add_method(
+            ua.NodeId("Set bed tempertature", self.idx),
+            ua.QualifiedName("Set bed tempertature", self.idx),
+            set_bed_temperature,
             [ua.VariantType.Int64],
+            []
         )
 
     async def start(self) -> None:
@@ -202,6 +229,7 @@ class OpcuaConnector(MoonrakerListener):
             self._logger.info("Received status update notnificatio %s -> %s", timestamp, message)
 
 async def main():
+    global listener
     listener = OpcuaConnector("opc.tcp://0.0.0.0:4840/freeopcua/server/", "http://automation.ceff.ch")
     client = listener.client
     await listener.start()
