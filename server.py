@@ -25,31 +25,64 @@ PRINTER_INFO_FILE="printer_info.json"
 logging.basicConfig(
     level=logging.WARNING, format="%(name)s - %(levelname)s - %(message)s"
 )
-logging.getLogger("moonraker_api").setLevel(logging.INFO)
-logging.getLogger(__name__).setLevel(logging.INFO)
+logging.getLogger("moonraker_api").setLevel(logging.DEBUG)
+logging.getLogger(__name__).setLevel(logging.DEBUG)
 _LOGGER = logging.getLogger(__name__)
 
 
 @uamethod
 async def homeXYZ(parent):
     params = {"script": "G28"}
-    await listener.client.call_method("printer.gcode.script", **params)
+    res = await listener.client.call_method("printer.gcode.script", **params)
+    return res
 
 @uamethod
 async def set_extruder_temperature(parent, temp):
     params = {"script": f'SET_HEATER_TEMPERATURE HEATER=extruder TARGET={temp}'}
-    await listener.client.call_method("printer.gcode.script", **params)
+    res = await listener.client.call_method("printer.gcode.script", **params)
+    return res
 
 @uamethod
 async def set_bed_temperature(parent, temp):
     params = {"script": f'SET_HEATER_TEMPERATURE HEATER=heater_bed TARGET={temp}'}
-    await listener.client.call_method("printer.gcode.script", **params)
+    res = await listener.client.call_method("printer.gcode.script", **params)
+    return res
 
+@uamethod
+async def start_job(parent, file):
+    params = {"filename": file}
+    res = await listener.client.call_method("printer.print.start", **params)
+    return res
 
-async def increment_coro(value):
-    while True:
-        await asyncio.sleep(1)
-        value+=0.1
+@uamethod
+async def pause_job(parent):
+    res = await listener.client.call_method("printer.print.pause")
+    return res
+
+@uamethod
+async def resume_job(parent):
+    res = await listener.client.call_method("printer.print.resume")
+    return res
+
+@uamethod
+async def cancel_job(parent):
+    res = await listener.client.call_method("printer.print.cancel")
+    return res
+
+@uamethod
+async def firmware_restart(parent):
+    res = await listener.client.call_method("printer.firmware_restart")
+    return res
+
+@uamethod
+async def reboot(parent):
+    res = await listener.client.call_method("machine.reboot")
+    return res
+
+@uamethod
+async def shutdown(parent):
+    res = await listener.client.call_method("machine.shutdown")
+    return res
 
 class OpcuaConnector(MoonrakerListener):
     def __init__(self, endpoint, uri):
@@ -167,21 +200,79 @@ class OpcuaConnector(MoonrakerListener):
             ua.QualifiedName("Home all axis", self.idx),
             homeXYZ,
             [],
-            []
+            [ua.VariantType.String]
         )
+
         await printerActionObj.add_method(
             ua.NodeId("Set extruder tempertature", self.idx),
             ua.QualifiedName("Set extruder tempertature", self.idx),
             set_extruder_temperature,
             [ua.VariantType.Int64],
-            []
+            [ua.VariantType.String]
         )
+
         await printerActionObj.add_method(
             ua.NodeId("Set bed tempertature", self.idx),
             ua.QualifiedName("Set bed tempertature", self.idx),
             set_bed_temperature,
             [ua.VariantType.Int64],
-            []
+            [ua.VariantType.String]
+        )
+
+        await printerActionObj.add_method(
+            ua.NodeId("Start job", self.idx),
+            ua.QualifiedName("Start job", self.idx),
+            start_job,
+            [ua.VariantType.String],
+            [ua.VariantType.String]
+        )
+
+        await printerActionObj.add_method(
+            ua.NodeId("Pause job", self.idx),
+            ua.QualifiedName("Pause job", self.idx),
+            pause_job,
+            [],
+            [ua.VariantType.String]
+        )
+
+        await printerActionObj.add_method(
+            ua.NodeId("Resume job", self.idx),
+            ua.QualifiedName("Resume job", self.idx),
+            resume_job,
+            [],
+            [ua.VariantType.String]
+        )
+
+        await printerActionObj.add_method(
+            ua.NodeId("Cancel job", self.idx),
+            ua.QualifiedName("Cancel job", self.idx),
+            cancel_job,
+            [],
+            [ua.VariantType.String]
+        )
+
+        await printerActionObj.add_method(
+            ua.NodeId("Firmware restart", self.idx),
+            ua.QualifiedName("Firmware restart", self.idx),
+            firmware_restart,
+            [],
+            [ua.VariantType.String]
+        )
+
+        await printerActionObj.add_method(
+            ua.NodeId("Reboot", self.idx),
+            ua.QualifiedName("Reboot", self.idx),
+            reboot,
+            [],
+            [ua.VariantType.String]
+        )
+
+        await printerActionObj.add_method(
+            ua.NodeId("Shutdown", self.idx),
+            ua.QualifiedName("Shutdown", self.idx),
+            shutdown,
+            [],
+            [ua.VariantType.String]
         )
 
     async def start(self) -> None:
@@ -257,6 +348,7 @@ async def main():
                "extruder": ["temperature", "target", "power"],
                "toolhead": ["position"],
                "fan": ["speed"],
+               "heater_fan": ["enabled"],
                "filament_switch_sensor": ["filament_detected", "enabled"],
               }}
             response = await client.call_method("printer.objects.query", **params)
