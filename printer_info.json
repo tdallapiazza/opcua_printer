@@ -4,8 +4,7 @@
         "Model": "Voron 0.2",
         "Idle power":32.0,
         "Location": "BE59",
-        "Cumulated energy [J]": 156.3,
-        "Cumulated printing hours": 1234
+        "Cumulated energy [J]": 156.3
     },
 
     "printbed":{

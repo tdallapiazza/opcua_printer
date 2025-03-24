@@ -131,7 +131,7 @@ class OpcuaConnector(MoonrakerListener):
         await printerInfoObj.add_variable(self.idx, "State", ua.Variant("", ua.VariantType.String)) # 4
         await printerInfoObj.add_variable(self.idx, "State message", ua.Variant("", ua.VariantType.String)) # 5
         await printerInfoObj.add_variable(self.idx, "Cumulated energy [J]", self.additional_printer_data["printer"]["Cumulated energy [J]"]) # 5
-        await printerInfoObj.add_variable(self.idx, "Cumulated printing hours", self.additional_printer_data["printer"]["Cumulated printing hours"])
+        await printerInfoObj.add_variable(self.idx, "Cumulated printing hours", 0)
 
 
         #   systems object
@@ -190,6 +190,12 @@ class OpcuaConnector(MoonrakerListener):
         await printerSpoolObj.add_variable(self.idx, "Filament weight (measured)", self.spool_manager.tag_data["Filament weight (measured)"])
         await printerSpoolObj.add_variable(self.idx, "Filament length (measured)", self.spool_manager.tag_data["Filament length (measured)"])
         
+        #   job object
+        printerJobObj = await self.printerObj.add_object(self.idx, "Job")
+        await printerJobObj.add_variable(self.idx, "State", ua.Variant("", ua.VariantType.String))
+        await printerJobObj.add_variable(self.idx, "State message", ua.Variant("", ua.VariantType.String))
+        await printerJobObj.add_variable(self.idx, "Total job duration [s]", 0.0) # 5
+        await printerJobObj.add_variable(self.idx, "Job print time spent [s]", 0.0)
 
         #   actions
         printerActionObj = await self.printerObj.add_object(self.idx, "Actions")
@@ -350,9 +356,10 @@ async def main():
                "fan": ["speed"],
                "heater_fan heater_fan": ["speed"],
                "filament_switch_sensor runout_sensor": ["filament_detected"],
+               "print_stats": ["total_duration", "print_duration", "state", "message"]
               }}
             response = await client.call_method("printer.objects.query", **params)
-            # endstops = await client.call_method("printer.query_endstops.status")
+
             # update the ua nodes accordingly
             webhook = response.get("status", {}).get("webhooks", {})
             if webhook:
@@ -405,15 +412,29 @@ async def main():
             if fan:
                 my_node = await listener.printerObj.get_child(['2:Systems', '2:Hotend', '2:Piece cooling fan speed'])
                 await my_node.set_value(fan.get("speed", 0.0))
-            heater_fan = response.get("status", {}).get("heater_fan", {})
+            heater_fan = response.get("status", {}).get("heater_fan heater_fan", {})
             if heater_fan:
                 my_node = await listener.printerObj.get_child(['2:Systems', '2:Hotend', '2:Hot end fan ON'])
-                await my_node.set_value(fan.get("speed", False))
+                if heater_fan.get("speed", 0.0)>0:
+                    await my_node.set_value(True)
+                else:
+                    await my_node.set_value(False)
 
-            filament_switch_sensor=response.get("status", {}).get("filament_switch_sensor", {})
+            filament_switch_sensor=response.get("status", {}).get("filament_switch_sensor runout_sensor", {})
             if filament_switch_sensor:
                 my_node = await listener.printerObj.get_child(['2:Systems', '2:Frame', '2:Filament present'])
-                await my_node.set_value(fan.get("filament_detected", False))
+                await my_node.set_value(filament_switch_sensor.get("filament_detected", False))
+
+            print_stats = response.get("status", {}).get("print_stats", {})
+            if print_stats:
+                my_node = await listener.printerObj.get_child(['2:Job', '2:State'])
+                await my_node.set_value(print_stats.get("state", ""))
+                my_node = await listener.printerObj.get_child(['2:Job', '2:State message'])
+                await my_node.set_value(print_stats.get("message", ""))
+                my_node = await listener.printerObj.get_child(['2:Job', '2:Total job duration [s]'])
+                await my_node.set_value(print_stats.get("total_duration", ""))
+                my_node = await listener.printerObj.get_child(['2:Job', '2:Job print time spent [s]'])
+                await my_node.set_value(print_stats.get("print_duration", ""))
             
             # Get other non-printer objects
             response = await client.call_method("printer.query_endstops.status")
