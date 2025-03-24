@@ -169,7 +169,7 @@ class OpcuaConnector(MoonrakerListener):
 
         #      frame
         printerFrameObj = await printerSystemObj.add_object(self.idx, "Frame")
-        await printerFrameObj.add_variable(self.idx, "Filament runout sensor ON", ua.Variant(False, ua.VariantType.Boolean))
+        await printerFrameObj.add_variable(self.idx, "Filament present", ua.Variant(False, ua.VariantType.Boolean))
         await printerFrameObj.add_variable(self.idx, "X endstop triggered", ua.Variant(False, ua.VariantType.Boolean))
         await printerFrameObj.add_variable(self.idx, "Y endstop triggered", ua.Variant(False, ua.VariantType.Boolean))
         await printerFrameObj.add_variable(self.idx, "Z endstop triggered", ua.Variant(False, ua.VariantType.Boolean))
@@ -348,8 +348,8 @@ async def main():
                "extruder": ["temperature", "target", "power"],
                "toolhead": ["position"],
                "fan": ["speed"],
-               "heater_fan": ["enabled"],
-               "filament_switch_sensor": ["filament_detected", "enabled"],
+               "heater_fan heater_fan": ["speed"],
+               "filament_switch_sensor runout_sensor": ["filament_detected"],
               }}
             response = await client.call_method("printer.objects.query", **params)
             # endstops = await client.call_method("printer.query_endstops.status")
@@ -405,6 +405,42 @@ async def main():
             if fan:
                 my_node = await listener.printerObj.get_child(['2:Systems', '2:Hotend', '2:Piece cooling fan speed'])
                 await my_node.set_value(fan.get("speed", 0.0))
+            heater_fan = response.get("status", {}).get("heater_fan", {})
+            if heater_fan:
+                my_node = await listener.printerObj.get_child(['2:Systems', '2:Hotend', '2:Hot end fan ON'])
+                await my_node.set_value(fan.get("speed", False))
+
+            filament_switch_sensor=response.get("status", {}).get("filament_switch_sensor", {})
+            if filament_switch_sensor:
+                my_node = await listener.printerObj.get_child(['2:Systems', '2:Frame', '2:Filament present'])
+                await my_node.set_value(fan.get("filament_detected", False))
+            
+            # Get other non-printer objects
+            response = await client.call_method("printer.query_endstops.status")
+
+            my_node = await listener.printerObj.get_child(['2:Systems', '2:Frame', '2:X endstop triggered'])
+            if response.get("x",{})=="TRIGGERED":
+                await my_node.set_value(True)
+            else:
+                await my_node.set_value(False)
+            
+            my_node = await listener.printerObj.get_child(['2:Systems', '2:Frame', '2:Y endstop triggered'])
+            if response.get("y",{})=="TRIGGERED":
+                await my_node.set_value(True)
+            else:
+                await my_node.set_value(False)
+
+            my_node = await listener.printerObj.get_child(['2:Systems', '2:Frame', '2:Z endstop triggered'])
+            if response.get("z",{})=="TRIGGERED":
+                await my_node.set_value(True)
+            else:
+                await my_node.set_value(False)
+
+            response = await client.call_method("server.history.totals")
+            total_print_time = response.get("job_totals",{}).get("total_print_time")
+            if total_print_time:
+                my_node = await listener.printerObj.get_child(['2:Info', '2:Cumulated printing hours'])
+                await my_node.set_value(total_print_time)
 
             # Update energy
             energy_to_add = (listener.additional_printer_data["printer"]["Idle power"]+bed_power+extruder_power)*listener.update_period
