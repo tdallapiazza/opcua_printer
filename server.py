@@ -437,25 +437,25 @@ async def main():
                 await my_node.set_value(print_stats.get("print_duration", ""))
             
             # Get other non-printer objects
-            response = await client.call_method("printer.query_endstops.status")
+            # response = await client.call_method("printer.query_endstops.status")
 
-            my_node = await listener.printerObj.get_child(['2:Systems', '2:Frame', '2:X endstop triggered'])
-            if response.get("x",{})=="TRIGGERED":
-                await my_node.set_value(True)
-            else:
-                await my_node.set_value(False)
+            # my_node = await listener.printerObj.get_child(['2:Systems', '2:Frame', '2:X endstop triggered'])
+            # if response.get("x",{})=="TRIGGERED":
+            #     await my_node.set_value(True)
+            # else:
+            #     await my_node.set_value(False)
             
-            my_node = await listener.printerObj.get_child(['2:Systems', '2:Frame', '2:Y endstop triggered'])
-            if response.get("y",{})=="TRIGGERED":
-                await my_node.set_value(True)
-            else:
-                await my_node.set_value(False)
+            # my_node = await listener.printerObj.get_child(['2:Systems', '2:Frame', '2:Y endstop triggered'])
+            # if response.get("y",{})=="TRIGGERED":
+            #     await my_node.set_value(True)
+            # else:
+            #     await my_node.set_value(False)
 
-            my_node = await listener.printerObj.get_child(['2:Systems', '2:Frame', '2:Z endstop triggered'])
-            if response.get("z",{})=="TRIGGERED":
-                await my_node.set_value(True)
-            else:
-                await my_node.set_value(False)
+            # my_node = await listener.printerObj.get_child(['2:Systems', '2:Frame', '2:Z endstop triggered'])
+            # if response.get("z",{})=="TRIGGERED":
+            #     await my_node.set_value(True)
+            # else:
+            #     await my_node.set_value(False)
 
             response = await client.call_method("server.history.totals")
             total_print_time = response.get("job_totals",{}).get("total_print_time")
