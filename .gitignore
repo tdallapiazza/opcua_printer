@@ -53,3 +53,10 @@ python-env-tools/**
 python_files/tests/*/.data/.coverage*
 python_files/tests/*/.data/*/.coverage*
 src/testTestingRootWkspc/coverageWorkspace/.coverage
+# venv folders
+bin/
+include/
+lib/
+lib64/
+lib64*
+pyvenv*

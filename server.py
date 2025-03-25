@@ -25,8 +25,8 @@ PRINTER_INFO_FILE="printer_info.json"
 logging.basicConfig(
     level=logging.WARNING, format="%(name)s - %(levelname)s - %(message)s"
 )
-logging.getLogger("moonraker_api").setLevel(logging.DEBUG)
-logging.getLogger(__name__).setLevel(logging.DEBUG)
+logging.getLogger("moonraker_api").setLevel(logging.INFO)
+logging.getLogger(__name__).setLevel(logging.INFO)
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -131,7 +131,7 @@ class OpcuaConnector(MoonrakerListener):
         await printerInfoObj.add_variable(self.idx, "State", ua.Variant("", ua.VariantType.String)) # 4
         await printerInfoObj.add_variable(self.idx, "State message", ua.Variant("", ua.VariantType.String)) # 5
         await printerInfoObj.add_variable(self.idx, "Cumulated energy [J]", self.additional_printer_data["printer"]["Cumulated energy [J]"]) # 5
-        await printerInfoObj.add_variable(self.idx, "Cumulated printing hours", 0)
+        await printerInfoObj.add_variable(self.idx, "Cumulated printing hours", 0.0)
 
 
         #   systems object
@@ -354,8 +354,8 @@ async def main():
                "extruder": ["temperature", "target", "power"],
                "toolhead": ["position"],
                "fan": ["speed"],
-               "heater_fan heater_fan": ["speed"],
-               "filament_switch_sensor runout_sensor": ["filament_detected"],
+               "heater_fan hotend_fan": ["speed"],
+               "filament_switch_sensor Filament_Runout_Sensor": ["filament_detected"],
                "print_stats": ["total_duration", "print_duration", "state", "message"]
               }}
             response = await client.call_method("printer.objects.query", **params)
@@ -412,7 +412,7 @@ async def main():
             if fan:
                 my_node = await listener.printerObj.get_child(['2:Systems', '2:Hotend', '2:Piece cooling fan speed'])
                 await my_node.set_value(fan.get("speed", 0.0))
-            heater_fan = response.get("status", {}).get("heater_fan heater_fan", {})
+            heater_fan = response.get("status", {}).get("heater_fan hotend_fan", {})
             if heater_fan:
                 my_node = await listener.printerObj.get_child(['2:Systems', '2:Hotend', '2:Hot end fan ON'])
                 if heater_fan.get("speed", 0.0)>0:
@@ -420,7 +420,7 @@ async def main():
                 else:
                     await my_node.set_value(False)
 
-            filament_switch_sensor=response.get("status", {}).get("filament_switch_sensor runout_sensor", {})
+            filament_switch_sensor=response.get("status", {}).get("filament_switch_sensor Filament_Runout_Sensor", {})
             if filament_switch_sensor:
                 my_node = await listener.printerObj.get_child(['2:Systems', '2:Frame', '2:Filament present'])
                 await my_node.set_value(filament_switch_sensor.get("filament_detected", False))
