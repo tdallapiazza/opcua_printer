@@ -20,13 +20,13 @@ import printing_plate_manager
 HOST = "localhost"
 PORT = 7125
 PRINTER_INFO_FILE="printer_info.json"
-
+MAPPINGS_FILE = "mappings.json"
 
 logging.basicConfig(
     level=logging.WARNING, format="%(name)s - %(levelname)s - %(message)s"
 )
-logging.getLogger("moonraker_api").setLevel(logging.INFO)
-logging.getLogger(__name__).setLevel(logging.INFO)
+logging.getLogger("moonraker_api").setLevel(logging.DEBUG)
+logging.getLogger(__name__).setLevel(logging.DEBUG)
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -105,6 +105,10 @@ class OpcuaConnector(MoonrakerListener):
         # load additionnal printer data
         with open(PRINTER_INFO_FILE, 'r') as file:
             self.additional_printer_data = json.load(file)
+
+        # load additionnal printer data
+        with open(MAPPINGS_FILE, 'r') as file:
+            self.mappings = json.load(file)
         
         # set update period [s]
         self.update_period = 1
@@ -160,10 +164,6 @@ class OpcuaConnector(MoonrakerListener):
         await printerHotendObj.add_variable(self.idx, "Temperature set point", 0.0)
         await printerHotendObj.add_variable(self.idx, "Power (PWM)", 0.0)
         await printerHotendObj.add_variable(self.idx, "Power (computed [Watts])", 0.0)
-        await printerHotendObj.add_variable(self.idx, "X position", 0.0)
-        await printerHotendObj.add_variable(self.idx, "Y position", 0.0)
-        await printerHotendObj.add_variable(self.idx, "Z position", 0.0)
-        await printerHotendObj.add_variable(self.idx, "E position", 0.0)
         await printerHotendObj.add_variable(self.idx, "Hot end fan ON", ua.Variant(False, ua.VariantType.Boolean))
         await printerHotendObj.add_variable(self.idx, "Piece cooling fan speed", 0.0)
 
@@ -281,6 +281,21 @@ class OpcuaConnector(MoonrakerListener):
             [ua.VariantType.String]
         )
 
+    async def update_databank(self, mapping, message):
+        # go over all keys in message dict
+        for key in message.keys():
+            # try to find the corresponding opcua_key in mapping
+            opcua_key=mapping.get(key,None)
+            if opcua_key is not None:
+                # Get the opc_ua node
+                my_node = await self.printerObj.get_child(opcua_key)
+                val = message[key]
+                # Check that the value is not None
+                # TODO better would be the check if the type is the one expected by the opc_ua node
+                if val is not None:
+                    # Update the value
+                    await my_node.set_value(message[key])
+
     async def start(self) -> None:
         """Start the websocket connection."""
         self.running = True
@@ -352,7 +367,6 @@ async def main():
               {"webhooks": ["state", "state_message"],
                "heater_bed": ["temperature", "target", "power"],
                "extruder": ["temperature", "target", "power"],
-               "toolhead": ["position"],
                "fan": ["speed"],
                "heater_fan hotend_fan": ["speed"],
                "filament_switch_sensor Filament_Runout_Sensor": ["filament_detected"],
@@ -361,107 +375,63 @@ async def main():
             response = await client.call_method("printer.objects.query", **params)
 
             # update the ua nodes accordingly
+            # webhook
             webhook = response.get("status", {}).get("webhooks", {})
-            if webhook:
-                my_node = await listener.printerObj.get_child(['2:Info', '2:State'])
-                await my_node.set_value(webhook.get("state", "Unknown"))
-                my_node = await listener.printerObj.get_child(['2:Info', '2:State message'])
-                await my_node.set_value(webhook.get("state_message", "Unknown"))
+            if bool(webhook):
+                await listener.update_databank(listener.mappings["webhooks"], webhook)
 
+            # heater_bed
             heaterbed = response.get("status", {}).get("heater_bed", {})
             bed_power = 0
-            if heaterbed:
-                my_node = await listener.printerObj.get_child(['2:Systems', '2:Bed', '2:Temperature'])
-                await my_node.set_value(heaterbed.get("temperature", 0.0))
-                my_node = await listener.printerObj.get_child(['2:Systems', '2:Bed', '2:Temperature set point'])
-                await my_node.set_value(heaterbed.get("target", 0.0))
-                my_node = await listener.printerObj.get_child(['2:Systems', '2:Bed', '2:Power (PWM)'])
+            if bool(heaterbed):
+                await listener.update_databank(listener.mappings["heater_bed"], heaterbed)
                 pow =heaterbed.get("power", 0.0)
-                await my_node.set_value(pow)
                 my_node = await listener.printerObj.get_child(['2:Systems', '2:Bed', '2:Power (computed [Watts])'])
                 bed_power= listener.additional_printer_data["printbed"]["Rated power"]*pow
-                await my_node.set_value(listener.additional_printer_data["printbed"]["Rated power"]*bed_power)
+                await my_node.set_value(bed_power)
 
-
+            # extruder
             extruder = response.get("status", {}).get("extruder", {})
             extruder_power=0
-            if extruder:
-                my_node = await listener.printerObj.get_child(['2:Systems', '2:Hotend', '2:Temperature'])
-                await my_node.set_value(extruder.get("temperature", 0.0))
-                my_node = await listener.printerObj.get_child(['2:Systems', '2:Hotend', '2:Temperature set point'])
-                await my_node.set_value(extruder.get("target", 0.0))
-                my_node = await listener.printerObj.get_child(['2:Systems', '2:Hotend', '2:Power (PWM)'])
+            if bool(extruder):
+                await listener.update_databank(listener.mappings["extruder"], extruder)
                 pow =extruder.get("power", 0.0)
-                await my_node.set_value(pow)
                 my_node = await listener.printerObj.get_child(['2:Systems', '2:Hotend', '2:Power (computed [Watts])'])
                 extruder_power = listener.additional_printer_data["hotend"]["Rated power"]*pow
                 await my_node.set_value(extruder_power)
             
-            toolhead = response.get("status", {}).get("toolhead", {})
-            if toolhead:
-                position=toolhead.get("position", [0.0, 0.0, 0.0, 0.0])
-                my_node = await listener.printerObj.get_child(['2:Systems', '2:Hotend', '2:X position'])
-                await my_node.set_value(position[0])
-                my_node = await listener.printerObj.get_child(['2:Systems', '2:Hotend', '2:Y position'])
-                await my_node.set_value(position[1])
-                my_node = await listener.printerObj.get_child(['2:Systems', '2:Hotend', '2:Z position'])
-                await my_node.set_value(position[2])
-                my_node = await listener.printerObj.get_child(['2:Systems', '2:Hotend', '2:E position'])
-                await my_node.set_value(position[3])
+            # fan
             fan = response.get("status", {}).get("fan", {})
-            if fan:
-                my_node = await listener.printerObj.get_child(['2:Systems', '2:Hotend', '2:Piece cooling fan speed'])
-                await my_node.set_value(fan.get("speed", 0.0))
-            heater_fan = response.get("status", {}).get("heater_fan hotend_fan", {})
-            if heater_fan:
-                my_node = await listener.printerObj.get_child(['2:Systems', '2:Hotend', '2:Hot end fan ON'])
-                if heater_fan.get("speed", 0.0)>0:
-                    await my_node.set_value(True)
-                else:
-                    await my_node.set_value(False)
+            if bool(fan):
+                await listener.update_databank(listener.mappings["fan"], fan)
 
+            # heater_fan
+            heater_fan = response.get("status", {}).get("heater_fan hotend_fan", {})
+            if bool(heater_fan):
+                key = listener.mappings["heater_fan"]["speed"]
+                my_node = await listener.printerObj.get_child(key)
+                speed =  heater_fan.get("speed", 0)
+                if speed is not None:
+                    if speed>0:
+                        await my_node.set_value(True)
+                    else:
+                        await my_node.set_value(False)
+
+            # filament_switch_sensor
             filament_switch_sensor=response.get("status", {}).get("filament_switch_sensor Filament_Runout_Sensor", {})
-            if filament_switch_sensor:
-                my_node = await listener.printerObj.get_child(['2:Systems', '2:Frame', '2:Filament present'])
-                await my_node.set_value(filament_switch_sensor.get("filament_detected", False))
+            if bool(filament_switch_sensor):
+                await listener.update_databank(listener.mappings["filament_switch_sensor"], filament_switch_sensor)
 
             print_stats = response.get("status", {}).get("print_stats", {})
-            if print_stats:
-                my_node = await listener.printerObj.get_child(['2:Job', '2:State'])
-                await my_node.set_value(print_stats.get("state", ""))
-                my_node = await listener.printerObj.get_child(['2:Job', '2:State message'])
-                await my_node.set_value(print_stats.get("message", ""))
-                my_node = await listener.printerObj.get_child(['2:Job', '2:Total job duration [s]'])
-                await my_node.set_value(print_stats.get("total_duration", ""))
-                my_node = await listener.printerObj.get_child(['2:Job', '2:Job print time spent [s]'])
-                await my_node.set_value(print_stats.get("print_duration", ""))
+            if bool(print_stats):
+                await listener.update_databank(listener.mappings["print_stats"], print_stats)
             
             # Get other non-printer objects
-            # response = await client.call_method("printer.query_endstops.status")
-
-            # my_node = await listener.printerObj.get_child(['2:Systems', '2:Frame', '2:X endstop triggered'])
-            # if response.get("x",{})=="TRIGGERED":
-            #     await my_node.set_value(True)
-            # else:
-            #     await my_node.set_value(False)
-            
-            # my_node = await listener.printerObj.get_child(['2:Systems', '2:Frame', '2:Y endstop triggered'])
-            # if response.get("y",{})=="TRIGGERED":
-            #     await my_node.set_value(True)
-            # else:
-            #     await my_node.set_value(False)
-
-            # my_node = await listener.printerObj.get_child(['2:Systems', '2:Frame', '2:Z endstop triggered'])
-            # if response.get("z",{})=="TRIGGERED":
-            #     await my_node.set_value(True)
-            # else:
-            #     await my_node.set_value(False)
 
             response = await client.call_method("server.history.totals")
-            total_print_time = response.get("job_totals",{}).get("total_print_time")
-            if total_print_time:
-                my_node = await listener.printerObj.get_child(['2:Info', '2:Cumulated printing hours'])
-                await my_node.set_value(total_print_time)
+            job_totals = response.get("job_totals",{})
+            if bool(job_totals):
+                await listener.update_databank(listener.mappings["job_totals"], job_totals)
 
             # Update energy
             energy_to_add = (listener.additional_printer_data["printer"]["Idle power"]+bed_power+extruder_power)*listener.update_period

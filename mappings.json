@@ -1,0 +1,42 @@
+{
+    "webhooks":{
+        "state":["2:Info", "2:State"],
+        "state_message":["2:Info", "2:State message"]
+    },
+
+    "heater_bed":{
+        "temperature":["2:Systems", "2:Bed", "2:Temperature"],
+        "target": ["2:Systems", "2:Bed", "2:Temperature set point"],
+        "power":["2:Systems", "2:Bed", "2:Power (PWM)"]
+    },
+
+    "extruder":{
+        "temperature":["2:Systems", "2:Hotend", "2:Temperature"],
+        "target":["2:Systems", "2:Hotend", "2:Temperature set point"],
+        "power":["2:Systems", "2:Hotend", "2:Power (PWM)"]
+    },
+
+    "fan":{
+        "speed":["2:Systems", "2:Hotend", "2:Piece cooling fan speed"]
+    },
+
+    "heater_fan":{
+        "speed":["2:Systems", "2:Hotend", "2:Hot end fan ON"]
+    },
+
+    "filament_switch_sensor":{
+        "filament_detected":["2:Systems", "2:Frame", "2:Filament present"]
+    },
+
+    "print_stats":{
+        "state":["2:Job", "2:State"],
+        "message":["2:Job", "2:State message"],
+        "total_duration":["2:Job", "2:Total job duration [s]"],
+        "print_duration":["2:Job", "2:Job print time spent [s]"]
+    },
+
+    "job_totals":{
+        "total_print_time":["2:Info", "2:Cumulated printing hours"]
+    }
+
+}
