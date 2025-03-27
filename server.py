@@ -16,7 +16,6 @@ from asyncua.common.methods import uamethod
 import json
 import spool_manager
 import printing_plate_manager
-from asyncua.common.xmlexporter import XmlExporter
 
 HOST = "localhost"
 PORT = 7125
@@ -98,7 +97,6 @@ class OpcuaConnector(MoonrakerListener):
         self.server = Server()
         self.endpoint=endpoint
         self.uri=uri
-        self.node_list=[]
 
         # add agregate managers
         self.spool_manager = spool_manager.SpoolManager()
@@ -127,232 +125,161 @@ class OpcuaConnector(MoonrakerListener):
 
         # printer object
         self.printerObj = await self.server.nodes.objects.add_object(self.idx, "Printer")
-        self.node_list.append(self.printerObj)
         #   info object
         printerInfoObj = await self.printerObj.add_object(self.idx, "Info")
-        self.node_list.append(printerInfoObj)
-        obj=await printerInfoObj.add_property(self.idx, "Name", ua.Variant("", ua.VariantType.String)) # 3 
-        self.node_list.append(obj)
-        obj=await printerInfoObj.add_property(self.idx, "Manufacturer", ua.Variant(self.additional_printer_data["printer"]["Manufacturer"], ua.VariantType.String)) # 3
-        self.node_list.append(obj)
-        obj=await printerInfoObj.add_property(self.idx, "Model", ua.Variant(self.additional_printer_data["printer"]["Model"], ua.VariantType.String)) # 3
-        self.node_list.append(obj)
-        obj=await printerInfoObj.add_property(self.idx, "Idle power", self.additional_printer_data["printer"]["Idle power"]) # 3
-        self.node_list.append(obj)
-        obj=await printerInfoObj.add_property(self.idx, "Location", ua.Variant(self.additional_printer_data["printer"]["Location"], ua.VariantType.String))
-        self.node_list.append(obj)
-        obj=await printerInfoObj.add_variable(self.idx, "State", ua.Variant("", ua.VariantType.String)) # 4
-        self.node_list.append(obj)
-        obj=await printerInfoObj.add_variable(self.idx, "State message", ua.Variant("", ua.VariantType.String)) # 5
-        self.node_list.append(obj)
-        obj=await printerInfoObj.add_variable(self.idx, "Cumulated energy [J]", self.additional_printer_data["printer"]["Cumulated energy [J]"]) # 5
-        self.node_list.append(obj)
-        obj=await printerInfoObj.add_variable(self.idx, "Cumulated printing hours", 0.0)
-        self.node_list.append(obj)
+        await printerInfoObj.add_property(self.idx, "Name", ua.Variant("", ua.VariantType.String)) # 3 
+        await printerInfoObj.add_property(self.idx, "Manufacturer", ua.Variant(self.additional_printer_data["printer"]["Manufacturer"], ua.VariantType.String)) # 3
+        await printerInfoObj.add_property(self.idx, "Model", ua.Variant(self.additional_printer_data["printer"]["Model"], ua.VariantType.String)) # 3
+        await printerInfoObj.add_property(self.idx, "Idle power", self.additional_printer_data["printer"]["Idle power"]) # 3
+        await printerInfoObj.add_property(self.idx, "Location", ua.Variant(self.additional_printer_data["printer"]["Location"], ua.VariantType.String))
+        await printerInfoObj.add_variable(self.idx, "State", ua.Variant("", ua.VariantType.String)) # 4
+        await printerInfoObj.add_variable(self.idx, "State message", ua.Variant("", ua.VariantType.String)) # 5
+        await printerInfoObj.add_variable(self.idx, "Cumulated energy [J]", self.additional_printer_data["printer"]["Cumulated energy [J]"]) # 5
+        await printerInfoObj.add_variable(self.idx, "Cumulated printing hours", 0.0)
+
 
         #   systems object
         printerSystemObj = await self.printerObj.add_object(self.idx, "Systems")
-        self.node_list.append(printerSystemObj)
         #      bed
         printerBedObj = await printerSystemObj.add_object(self.idx, "Bed")
-        self.node_list.append(printerBedObj)
-        obj=await printerBedObj.add_property(self.idx, "X dimension", self.additional_printer_data["printbed"]["X dimension"])
-        self.node_list.append(obj)
-        obj=await printerBedObj.add_property(self.idx, "Y dimension", self.additional_printer_data["printbed"]["Y dimension"])
-        self.node_list.append(obj)
-        obj=await printerBedObj.add_property(self.idx, "Rated power", self.additional_printer_data["printbed"]["Rated power"])
-        self.node_list.append(obj)
-        obj=await printerBedObj.add_variable(self.idx, "Temperature", 0.0)
-        self.node_list.append(obj)
-        obj=await printerBedObj.add_variable(self.idx, "Temperature set point", 0.0)
-        self.node_list.append(obj)
-        obj=await printerBedObj.add_variable(self.idx, "Power (PWM)", 0.0)
-        self.node_list.append(obj)
-        obj=await printerBedObj.add_variable(self.idx, "Power (computed [Watts])", 0.0)
-        self.node_list.append(obj)
-        obj=await printerBedObj.add_variable(self.idx, "Print plate present", ua.Variant(self.print_plate_manager.plate_present, ua.VariantType.Boolean))
-        self.node_list.append(obj)
-        obj=await printerBedObj.add_variable(self.idx, "Print plate ID", self.print_plate_manager.plate_id)
-        self.node_list.append(obj)
+        await printerBedObj.add_property(self.idx, "X dimension", self.additional_printer_data["printbed"]["X dimension"])
+        await printerBedObj.add_property(self.idx, "Y dimension", self.additional_printer_data["printbed"]["Y dimension"])
+        await printerBedObj.add_property(self.idx, "Rated power", self.additional_printer_data["printbed"]["Rated power"])
+        await printerBedObj.add_variable(self.idx, "Temperature", 0.0)
+        await printerBedObj.add_variable(self.idx, "Temperature set point", 0.0)
+        await printerBedObj.add_variable(self.idx, "Power (PWM)", 0.0)
+        await printerBedObj.add_variable(self.idx, "Power (computed [Watts])", 0.0)
+        await printerBedObj.add_variable(self.idx, "Print plate present", ua.Variant(self.print_plate_manager.plate_present, ua.VariantType.Boolean))
+        await printerBedObj.add_variable(self.idx, "Print plate ID", self.print_plate_manager.plate_id)
 
         #      hotend
         printerHotendObj = await printerSystemObj.add_object(self.idx, "Hotend")
-        self.node_list.append(printerHotendObj)
-        obj=await printerHotendObj.add_property(self.idx, "Manufacturer", ua.Variant(self.additional_printer_data["hotend"]["Manufacturer"], ua.VariantType.String))
-        self.node_list.append(obj)
-        obj=await printerHotendObj.add_property(self.idx, "Model", ua.Variant(self.additional_printer_data["hotend"]["Model"], ua.VariantType.String))
-        self.node_list.append(obj)
-        obj=await printerHotendObj.add_property(self.idx, "Rated power", self.additional_printer_data["hotend"]["Rated power"])
-        self.node_list.append(obj)
-        obj=await printerHotendObj.add_property(self.idx, "Nozzle diameter", self.additional_printer_data["hotend"]["Nozzle diameter"])
-        self.node_list.append(obj)
-        obj=await printerHotendObj.add_variable(self.idx, "Nozzle printing hours", self.additional_printer_data["hotend"]["Nozzle printing hours"])
-        self.node_list.append(obj)
-        obj=await printerHotendObj.add_variable(self.idx, "Umblilical printing hours", self.additional_printer_data["hotend"]["Umblilical printing hours"])
-        self.node_list.append(obj)
-        obj=await printerHotendObj.add_variable(self.idx, "Temperature", 0.0)
-        self.node_list.append(obj)
-        obj=await printerHotendObj.add_variable(self.idx, "Temperature set point", 0.0)
-        self.node_list.append(obj)
-        obj=await printerHotendObj.add_variable(self.idx, "Power (PWM)", 0.0)
-        self.node_list.append(obj)
-        obj=await printerHotendObj.add_variable(self.idx, "Power (computed [Watts])", 0.0)
-        self.node_list.append(obj)
-        obj=await printerHotendObj.add_variable(self.idx, "Hot end fan ON", ua.Variant(False, ua.VariantType.Boolean))
-        self.node_list.append(obj)
-        obj=await printerHotendObj.add_variable(self.idx, "Piece cooling fan speed", 0.0)
-        self.node_list.append(obj)
+        await printerHotendObj.add_property(self.idx, "Manufacturer", ua.Variant(self.additional_printer_data["hotend"]["Manufacturer"], ua.VariantType.String))
+        await printerHotendObj.add_property(self.idx, "Model", ua.Variant(self.additional_printer_data["hotend"]["Model"], ua.VariantType.String))
+        await printerHotendObj.add_property(self.idx, "Rated power", self.additional_printer_data["hotend"]["Rated power"])
+        await printerHotendObj.add_property(self.idx, "Nozzle diameter", self.additional_printer_data["hotend"]["Nozzle diameter"])
+        await printerHotendObj.add_variable(self.idx, "Nozzle printing hours", self.additional_printer_data["hotend"]["Nozzle printing hours"])
+        await printerHotendObj.add_variable(self.idx, "Umblilical printing hours", self.additional_printer_data["hotend"]["Umblilical printing hours"])
+        await printerHotendObj.add_variable(self.idx, "Temperature", 0.0)
+        await printerHotendObj.add_variable(self.idx, "Temperature set point", 0.0)
+        await printerHotendObj.add_variable(self.idx, "Power (PWM)", 0.0)
+        await printerHotendObj.add_variable(self.idx, "Power (computed [Watts])", 0.0)
+        await printerHotendObj.add_variable(self.idx, "Hot end fan ON", ua.Variant(False, ua.VariantType.Boolean))
+        await printerHotendObj.add_variable(self.idx, "Piece cooling fan speed", 0.0)
 
         #      frame
         printerFrameObj = await printerSystemObj.add_object(self.idx, "Frame")
-        self.node_list.append(printerFrameObj)
-        obj=await printerFrameObj.add_variable(self.idx, "Filament present", ua.Variant(False, ua.VariantType.Boolean))
-        self.node_list.append(obj)
-        obj=await printerFrameObj.add_variable(self.idx, "X endstop triggered", ua.Variant(False, ua.VariantType.Boolean))
-        self.node_list.append(obj)
-        obj=await printerFrameObj.add_variable(self.idx, "Y endstop triggered", ua.Variant(False, ua.VariantType.Boolean))
-        self.node_list.append(obj)
-        obj=await printerFrameObj.add_variable(self.idx, "Z endstop triggered", ua.Variant(False, ua.VariantType.Boolean))
-        self.node_list.append(obj)
-        obj=await printerFrameObj.add_variable(self.idx, "Chamber temperature", 0.0)
-        self.node_list.append(obj)
+        await printerFrameObj.add_variable(self.idx, "Filament present", ua.Variant(False, ua.VariantType.Boolean))
+        await printerFrameObj.add_variable(self.idx, "X endstop triggered", ua.Variant(False, ua.VariantType.Boolean))
+        await printerFrameObj.add_variable(self.idx, "Y endstop triggered", ua.Variant(False, ua.VariantType.Boolean))
+        await printerFrameObj.add_variable(self.idx, "Z endstop triggered", ua.Variant(False, ua.VariantType.Boolean))
+        await printerFrameObj.add_variable(self.idx, "Chamber temperature", 0.0)
 
         #      spool
         printerSpoolObj = await printerSystemObj.add_object(self.idx, "Spool") # Structure from OpenTag spec. https://github.com/Bambu-Research-Group/RFID-Tag-Guide/blob/main/OpenTag.md
-        self.node_list.append(printerSpoolObj)
-        obj=await printerSpoolObj.add_property(self.idx, "Tag version", self.spool_manager.tag_data["Tag version"])
-        self.node_list.append(obj)
-        obj=await printerSpoolObj.add_property(self.idx, "Filament Manufacturer", ua.Variant(self.spool_manager.tag_data["Filament Manufacturer"], ua.VariantType.String))
-        self.node_list.append(obj)
-        obj=await printerSpoolObj.add_property(self.idx, "Material name", ua.Variant(self.spool_manager.tag_data["Material name"], ua.VariantType.String))
-        self.node_list.append(obj)
-        obj=await printerSpoolObj.add_property(self.idx, "Color Name", ua.Variant(self.spool_manager.tag_data["Color Name"], ua.VariantType.String))
-        self.node_list.append(obj)
-        obj=await printerSpoolObj.add_property(self.idx, "Diameter", self.spool_manager.tag_data["Diameter"])
-        self.node_list.append(obj)
-        obj=await printerSpoolObj.add_property(self.idx, "Weight (nominal)", self.spool_manager.tag_data["Weight (nominal)"])
-        self.node_list.append(obj)
-        obj=await printerSpoolObj.add_property(self.idx, "Print Temp (C)", self.spool_manager.tag_data["Print Temp (C)"])
-        self.node_list.append(obj)
-        obj=await printerSpoolObj.add_property(self.idx, "Bed Temp (C)", self.spool_manager.tag_data["Bed Temp (C)"])
-        self.node_list.append(obj)
-        obj=await printerSpoolObj.add_property(self.idx, "Density", self.spool_manager.tag_data["Density"])
-        self.node_list.append(obj)
-        obj=await printerSpoolObj.add_property(self.idx, "Color Hex", self.spool_manager.tag_data["Color Hex"])
-        self.node_list.append(obj)
-        obj=await printerSpoolObj.add_variable(self.idx, "Filament weight (measured)", self.spool_manager.tag_data["Filament weight (measured)"])
-        self.node_list.append(obj)
-        obj=await printerSpoolObj.add_variable(self.idx, "Filament length (measured)", self.spool_manager.tag_data["Filament length (measured)"])
-        self.node_list.append(obj)
+        await printerSpoolObj.add_property(self.idx, "Tag version", self.spool_manager.tag_data["Tag version"])
+        await printerSpoolObj.add_property(self.idx, "Filament Manufacturer", ua.Variant(self.spool_manager.tag_data["Filament Manufacturer"], ua.VariantType.String))
+        await printerSpoolObj.add_property(self.idx, "Material name", ua.Variant(self.spool_manager.tag_data["Material name"], ua.VariantType.String))
+        await printerSpoolObj.add_property(self.idx, "Color Name", ua.Variant(self.spool_manager.tag_data["Color Name"], ua.VariantType.String))
+        await printerSpoolObj.add_property(self.idx, "Diameter", self.spool_manager.tag_data["Diameter"])
+        await printerSpoolObj.add_property(self.idx, "Weight (nominal)", self.spool_manager.tag_data["Weight (nominal)"])
+        await printerSpoolObj.add_property(self.idx, "Print Temp (C)", self.spool_manager.tag_data["Print Temp (C)"])
+        await printerSpoolObj.add_property(self.idx, "Bed Temp (C)", self.spool_manager.tag_data["Bed Temp (C)"])
+        await printerSpoolObj.add_property(self.idx, "Density", self.spool_manager.tag_data["Density"])
+        await printerSpoolObj.add_property(self.idx, "Color Hex", self.spool_manager.tag_data["Color Hex"])
+        await printerSpoolObj.add_variable(self.idx, "Filament weight (measured)", self.spool_manager.tag_data["Filament weight (measured)"])
+        await printerSpoolObj.add_variable(self.idx, "Filament length (measured)", self.spool_manager.tag_data["Filament length (measured)"])
         
         #   job object
         printerJobObj = await self.printerObj.add_object(self.idx, "Job")
-        self.node_list.append(printerJobObj)
-        obj=await printerJobObj.add_variable(self.idx, "State", ua.Variant("", ua.VariantType.String))
-        self.node_list.append(obj)
-        obj=await printerJobObj.add_variable(self.idx, "State message", ua.Variant("", ua.VariantType.String))
-        self.node_list.append(obj)
-        obj=await printerJobObj.add_variable(self.idx, "Total job duration [s]", 0.0)
-        self.node_list.append(obj)
-        obj=await printerJobObj.add_variable(self.idx, "Job print time spent [s]", 0.0)
-        self.node_list.append(obj)
+        await printerJobObj.add_variable(self.idx, "State", ua.Variant("", ua.VariantType.String))
+        await printerJobObj.add_variable(self.idx, "State message", ua.Variant("", ua.VariantType.String))
+        await printerJobObj.add_variable(self.idx, "Total job duration [s]", 0.0) # 5
+        await printerJobObj.add_variable(self.idx, "Job print time spent [s]", 0.0)
 
         #   actions
         printerActionObj = await self.printerObj.add_object(self.idx, "Actions")
-        self.node_list.append(printerActionObj)
 
         # add a methods
-        obj=await printerActionObj.add_method(
+        await printerActionObj.add_method(
             ua.NodeId("Home all axis", self.idx),
             ua.QualifiedName("Home all axis", self.idx),
             homeXYZ,
             [],
             [ua.VariantType.String]
         )
-        self.node_list.append(obj)
 
-        obj=await printerActionObj.add_method(
+        await printerActionObj.add_method(
             ua.NodeId("Set extruder tempertature", self.idx),
             ua.QualifiedName("Set extruder tempertature", self.idx),
             set_extruder_temperature,
             [ua.VariantType.Int64],
             [ua.VariantType.String]
         )
-        self.node_list.append(obj)
 
-        obj=await printerActionObj.add_method(
+        await printerActionObj.add_method(
             ua.NodeId("Set bed tempertature", self.idx),
             ua.QualifiedName("Set bed tempertature", self.idx),
             set_bed_temperature,
             [ua.VariantType.Int64],
             [ua.VariantType.String]
         )
-        self.node_list.append(obj)
 
-        obj=await printerActionObj.add_method(
+        await printerActionObj.add_method(
             ua.NodeId("Start job", self.idx),
             ua.QualifiedName("Start job", self.idx),
             start_job,
             [ua.VariantType.String],
             [ua.VariantType.String]
         )
-        self.node_list.append(obj)
 
-        obj=await printerActionObj.add_method(
+        await printerActionObj.add_method(
             ua.NodeId("Pause job", self.idx),
             ua.QualifiedName("Pause job", self.idx),
             pause_job,
             [],
             [ua.VariantType.String]
         )
-        self.node_list.append(obj)
 
-        obj=await printerActionObj.add_method(
+        await printerActionObj.add_method(
             ua.NodeId("Resume job", self.idx),
             ua.QualifiedName("Resume job", self.idx),
             resume_job,
             [],
             [ua.VariantType.String]
         )
-        self.node_list.append(obj)
 
-        obj=await printerActionObj.add_method(
+        await printerActionObj.add_method(
             ua.NodeId("Cancel job", self.idx),
             ua.QualifiedName("Cancel job", self.idx),
             cancel_job,
             [],
             [ua.VariantType.String]
         )
-        self.node_list.append(obj)
 
-        obj=await printerActionObj.add_method(
+        await printerActionObj.add_method(
             ua.NodeId("Firmware restart", self.idx),
             ua.QualifiedName("Firmware restart", self.idx),
             firmware_restart,
             [],
             [ua.VariantType.String]
         )
-        self.node_list.append(obj)
 
-        obj=await printerActionObj.add_method(
+        await printerActionObj.add_method(
             ua.NodeId("Reboot", self.idx),
             ua.QualifiedName("Reboot", self.idx),
             reboot,
             [],
             [ua.VariantType.String]
         )
-        self.node_list.append(obj)
 
-        obj=await printerActionObj.add_method(
+        await printerActionObj.add_method(
             ua.NodeId("Shutdown", self.idx),
             ua.QualifiedName("Shutdown", self.idx),
             shutdown,
             [],
             [ua.VariantType.String]
         )
-        self.node_list.append(obj)
-
-        
 
     async def update_databank(self, mapping, message):
         # go over all keys in message dict
@@ -416,19 +343,12 @@ class OpcuaConnector(MoonrakerListener):
 async def main():
     global listener
     listener = OpcuaConnector("opc.tcp://0.0.0.0:4840/freeopcua/server/", "http://automation.ceff.ch")
-
-
     client = listener.client
     await listener.start()
 
 
     # Setup the adress space
     await listener.setup_address_space()
-
-    # Export to xml
-    exporter = XmlExporter(listener.server)
-    await exporter.build_etree(listener.node_list)
-    await exporter.write_xml("ua-export.xml")
 
     response = await client.call_method("printer.info")
     
