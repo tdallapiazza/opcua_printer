@@ -84,6 +84,34 @@ async def shutdown(parent):
     res = await listener.client.call_method("machine.shutdown")
     return res
 
+@uamethod
+async def querry_endstops(parent):
+    response = await listener.client.call_method("printer.query_endstops.status")
+    my_node = await listener.printerObj.get_child(['2:Systems', '2:Frame', '2:X endstop triggered'])
+    x=response.get("x","")
+    y=response.get("y","")
+    z=response.get("z","")
+    if x=="TRIGGERED":
+        await my_node.set_value(True)
+    else:
+        await my_node.set_value(False)
+    
+    my_node = await listener.printerObj.get_child(['2:Systems', '2:Frame', '2:Y endstop triggered'])
+    if y=="TRIGGERED":
+        await my_node.set_value(True)
+    else:
+        await my_node.set_value(False)
+
+    my_node = await listener.printerObj.get_child(['2:Systems', '2:Frame', '2:Z endstop triggered'])
+    if z=="TRIGGERED":
+        await my_node.set_value(True)
+    else:
+        await my_node.set_value(False)
+    res= f"x:{x}, y:{y}, z:{z}"
+    return res
+    
+
+
 class OpcuaConnector(MoonrakerListener):
     def __init__(self, endpoint, uri):
         self.running = False
@@ -174,6 +202,15 @@ class OpcuaConnector(MoonrakerListener):
         await printerFrameObj.add_variable(self.idx, "Y endstop triggered", ua.Variant(False, ua.VariantType.Boolean))
         await printerFrameObj.add_variable(self.idx, "Z endstop triggered", ua.Variant(False, ua.VariantType.Boolean))
         await printerFrameObj.add_variable(self.idx, "Chamber temperature", 0.0)
+        await printerFrameObj.add_method(
+            ua.NodeId("Querry enstops", self.idx),
+            ua.QualifiedName("Querry enstops", self.idx),
+            querry_endstops,
+            [],
+            [ua.VariantType.String]
+        )
+
+        
 
         #      spool
         printerSpoolObj = await printerSystemObj.add_object(self.idx, "Spool") # Structure from OpenTag spec. https://github.com/Bambu-Research-Group/RFID-Tag-Guide/blob/main/OpenTag.md
