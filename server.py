@@ -25,8 +25,8 @@ MAPPINGS_FILE = "mappings.json"
 logging.basicConfig(
     level=logging.WARNING, format="%(name)s - %(levelname)s - %(message)s"
 )
-logging.getLogger("moonraker_api").setLevel(logging.DEBUG)
-logging.getLogger(__name__).setLevel(logging.DEBUG)
+logging.getLogger("moonraker_api").setLevel(logging.INFO)
+logging.getLogger(__name__).setLevel(logging.INFO)
 _LOGGER = logging.getLogger(__name__)
 
 
@@ -410,6 +410,7 @@ async def main():
                "print_stats": ["total_duration", "print_duration", "state", "message"]
               }}
             response = await client.call_method("printer.objects.query", **params)
+            await client.call_method("printer.objects.subscribe", **params)
 
             # update the ua nodes accordingly
             # webhook
