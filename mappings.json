@@ -20,11 +20,11 @@
         "speed":["2:Systems", "2:Hotend", "2:Piece cooling fan speed"]
     },
 
-    "heater_fan":{
+    "heater_fan hotend_fan":{
         "speed":["2:Systems", "2:Hotend", "2:Hot end fan ON"]
     },
 
-    "filament_switch_sensor":{
+    "filament_switch_sensor Filament_Runout_Sensor":{
         "filament_detected":["2:Systems", "2:Frame", "2:Filament present"]
     },
 

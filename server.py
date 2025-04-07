@@ -126,6 +126,13 @@ class OpcuaConnector(MoonrakerListener):
         self.endpoint=endpoint
         self.uri=uri
 
+        # declare power computations times and powers
+        self.last_heater_power_time = 0.0
+        self.last_bed_power_time = 0.0
+        self.last_idle_power_time = 0.0
+        self.last_heater_power = 0.0
+        self.last_bed_power = 0.0
+
         # add agregate managers
         self.spool_manager = spool_manager.SpoolManager()
         self.print_plate_manager = printing_plate_manager.Printing_plate_manager()
@@ -354,6 +361,7 @@ class OpcuaConnector(MoonrakerListener):
         elif state == WEBSOCKET_STATE_STOPPING:
             pass
         elif state == WEBSOCKET_STATE_STOPPED:
+            self._logger.info("Websocket closed. Stopping services")
             await self.stop()
             pass
 
@@ -376,9 +384,51 @@ class OpcuaConnector(MoonrakerListener):
             message = data[0]
             timestamp = data[1]
             self._logger.info("Received status update notnificatio %s -> %s", timestamp, message)
-            topics = message.keys()
-            for topic in topics:
-                await listener.update_databank(listener.mappings[topic], message[topic])
+            await self.process_status_message(message, timestamp)
+            
+    
+    async def process_status_message(self, message, timestamp):
+        # get messages keys
+        topics = message.keys()
+
+        # in any case add idle accumulated energy
+        accumulated_energy = (timestamp-self.last_idle_power_time)*self.additional_printer_data["printer"]["Idle power"]
+
+        # iterate keys to find data
+        for topic in topics:
+            await listener.update_databank(listener.mappings[topic], message[topic])
+            # Treate special cases requiring calculations
+            if topic == "heater_bed":
+                bed_power=message[topic].get("power",{})
+                if bed_power is not {}:
+                    # We only have PWM. Compute power in Watts
+                    power= bed_power*self.additional_printer_data["printbed"]["Rated power"]
+                    my_node = await listener.printerObj.get_child(['2:Systems', '2:Bed','2:Power (computed [Watts])'])
+                    await my_node.write_value(power)
+                    # Last bed power initialized at 0 so no need to check last bed power timestamp
+                    accumulated_energy = accumulated_energy+(timestamp-self.last_bed_power)*self.last_bed_power
+                    # updates
+                    self.last_bed_power=power
+                    self.last_bed_power_time= timestamp
+            if topic == "extruder":
+                heater_power=message[topic].get("power",{})
+                if heater_power is not {}:
+                    my_node = await listener.printerObj.get_child(['2:Systems', '2:Hotend','2:Power (computed [Watts])'])
+                    await my_node.write_value(power)
+                    # Last bed power initialized at 0 so no need to check last bed power timestamp
+                    accumulated_energy = accumulated_energy+(timestamp-self.last_heater_power_time)*self.last_heater_power
+                    # updates
+                    self.last_heater_power=power
+                    self.last_heater_power_time= timestamp
+        
+        # Finally update energy consumed
+        my_node = await listener.printerObj.get_child(['2:Info', '2:Cumulated energy [J]'])
+        energy = await my_node.get_value() + accumulated_energy
+        await my_node.write_value(energy)
+            
+
+
+
 
 async def main():
     global listener
@@ -392,8 +442,8 @@ async def main():
 
     response = await client.call_method("printer.info")
     
-    # Set the printer_info printer_name and printer_status
-    my_node = listener.server.get_node("ns=2;i=3")
+    # Set the printer_name
+    my_node = listener.server.get_node(["2:Info", "2:Name"])
     await my_node.set_value(response["hostname"])
 
     # Subscribe to printer object state changes
@@ -410,58 +460,10 @@ async def main():
 
     # Force first data readings
     response = await client.call_method("printer.objects.query", **params)
-
-    # update the ua nodes accordingly
-    # webhook
-    webhook = response.get("status", {}).get("webhooks", {})
-    if bool(webhook):
-        await listener.update_databank(listener.mappings["webhooks"], webhook)
-
-    # heater_bed
-    heaterbed = response.get("status", {}).get("heater_bed", {})
-    bed_power = 0
-    if bool(heaterbed):
-        await listener.update_databank(listener.mappings["heater_bed"], heaterbed)
-        pow =heaterbed.get("power", 0.0)
-        my_node = await listener.printerObj.get_child(['2:Systems', '2:Bed', '2:Power (computed [Watts])'])
-        bed_power= listener.additional_printer_data["printbed"]["Rated power"]*pow
-        await my_node.set_value(bed_power)
-
-    # extruder
-    extruder = response.get("status", {}).get("extruder", {})
-    extruder_power=0
-    if bool(extruder):
-        await listener.update_databank(listener.mappings["extruder"], extruder)
-        pow =extruder.get("power", 0.0)
-        my_node = await listener.printerObj.get_child(['2:Systems', '2:Hotend', '2:Power (computed [Watts])'])
-        extruder_power = listener.additional_printer_data["hotend"]["Rated power"]*pow
-        await my_node.set_value(extruder_power)
-    
-    # fan
-    fan = response.get("status", {}).get("fan", {})
-    if bool(fan):
-        await listener.update_databank(listener.mappings["fan"], fan)
-
-    # heater_fan
-    heater_fan = response.get("status", {}).get("heater_fan hotend_fan", {})
-    if bool(heater_fan):
-        key = listener.mappings["heater_fan"]["speed"]
-        my_node = await listener.printerObj.get_child(key)
-        speed =  heater_fan.get("speed", 0)
-        if speed is not None:
-            if speed>0:
-                await my_node.set_value(True)
-            else:
-                await my_node.set_value(False)
-
-    # filament_switch_sensor
-    filament_switch_sensor=response.get("status", {}).get("filament_switch_sensor Filament_Runout_Sensor", {})
-    if bool(filament_switch_sensor):
-        await listener.update_databank(listener.mappings["filament_switch_sensor"], filament_switch_sensor)
-
-    print_stats = response.get("status", {}).get("print_stats", {})
-    if bool(print_stats):
-        await listener.update_databank(listener.mappings["print_stats"], print_stats)
+    message = response.get("status",{})
+    timestamp = response.get("eventtime",0.0)
+    listener._logger.info("Received status %s -> %s", timestamp, message)
+    await listener.process_status_message(message, timestamp)
     
     # Now query non printer objects regularly (slow update polling)
     async with listener.server:
@@ -474,17 +476,12 @@ async def main():
             if bool(job_totals):
                 await listener.update_databank(listener.mappings["job_totals"], job_totals)
 
-            # Update energy
-            energy_to_add = (listener.additional_printer_data["printer"]["Idle power"]+bed_power+extruder_power)*listener.update_period
-            my_node = await listener.printerObj.get_child(['2:Info', '2:Cumulated energy [J]'])
-            energy = await my_node.get_value() + energy_to_add
-            await my_node.write_value(energy)
-
 
 
 
 if __name__ == "__main__":
 
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    loop.run_until_complete(main())
+    asyncio.run(main())
+    # loop = asyncio.new_event_loop()
+    # asyncio.set_event_loop(loop)
+    # loop.run_until_complete(main())
